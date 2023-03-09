@@ -5,7 +5,7 @@ set -u
 USERNAME=$(whoami)
 docker run -it \
 	--mount type=bind,source="$(pwd)",target=/home/${USERNAME}/robot_AQT \
-	--mount type=bind,source="/data1/honda/robot_AQT_results",target=/home/${USERNAME}/robot_AQT/results \
+	--mount type=bind,source="/path to/robot_AQT_results",target=/home/${USERNAME}/robot_AQT/results \
 	--user=$(id -u $USER):$(id -g $USER) \
 	--env="DISPLAY" \
     --volume="/etc/group:/etc/group:ro" \
