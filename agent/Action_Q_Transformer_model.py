@@ -1,7 +1,7 @@
 import torch
 from torch import nn
-import pfrl
-from torch.nn import Transformer, TransformerEncoder, TransformerDecoder, TransformerEncoderLayer, TransformerDecoderLayer
+import repos.pfrl.pfrl as pf
+from agent.module.transformer import Transformer, TransformerEncoder, TransformerDecoder, TransformerEncoderLayer, TransformerDecoderLayer
 
 use_cuda = torch.cuda.is_available()
 
@@ -29,11 +29,11 @@ class TransDQN(nn.Module):
         )
 
         encoder_layer = TransformerEncoderLayer(hidden_dim, nhead=4, dim_feedforward=64,
-                                                dropout=0.1, activation="relu")
+                                                dropout=0.1, activation="relu", normalize_before=False)
         self.transformer_encoder = TransformerEncoder(encoder_layer, num_encoder_layers)
 
         decoder_layer = TransformerDecoderLayer(hidden_dim, nhead=4, dim_feedforward=64,
-                                                dropout=0.1, activation="relu")
+                                                dropout=0.1, activation="relu", normalize_before=False)
         decoder_norm = nn.LayerNorm(hidden_dim)
         self.transformer_decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)        
 
@@ -59,7 +59,7 @@ class TransDQN(nn.Module):
         self.col_embed = nn.Parameter(torch.rand(12, hidden_dim // 2))
         
         self.Q_linear = nn.Linear(hidden_dim, 1)
-        self.q_f = pfrl.q_functions.DiscreteActionValueHead()
+        self.q_f = pf.q_functions.DiscreteActionValueHead()
         
         self._reset_parameters()
     
@@ -83,17 +83,7 @@ class TransDQN(nn.Module):
         src = x.flatten(2).permute(2, 0, 1)
         src = pos + 0.1 * src
 
-        x1 = self.transformer_encoder.layers[0].self_attn(src,src,src)[0]
-        x1 = self.transformer_encoder.layers[0].dropout1(x1)
-        x2 = self.transformer_encoder.layers[0].norm1(src+x1)
-        x3 = self.transformer_encoder.layers[0].linear1(x2)
-        x3 = self.transformer_encoder.layers[0].activation(x3)
-        x3 = self.transformer_encoder.layers[0].dropout(x3)
-        x3 = self.transformer_encoder.layers[0].linear2(x3)
-        x3 = self.transformer_encoder.layers[0].dropout2(x3)
-        memory = self.transformer_encoder.layers[0].norm2(x2+x3)
-        #memory = self.transformer_encoder(src)
-        print(src.shape, memory.shape)
+        memory = self.transformer_encoder(src)
         
         query_embed = []
         for action in self.act_list:
@@ -102,22 +92,8 @@ class TransDQN(nn.Module):
         query_embed = torch.cat(query_embed, dim=0)
         
         tgt = query_embed.unsqueeze(1).repeat(1, bs, 1)
-        #tgt = torch.zeros_like(query_embed)
 
-        y1 = self.transformer_decoder.layers[0].self_attn(tgt,tgt,tgt)[0]
-        y1 = self.transformer_decoder.layers[0].dropout1(y1)
-        y2 = self.transformer_decoder.layers[0].norm1(tgt+y1)
-        y3 = self.transformer_decoder.layers[0].multihead_attn(y2,memory,memory)[0]
-        y3 = self.transformer_decoder.layers[0].dropout2(y3)
-        y4 = self.transformer_decoder.layers[0].norm2(y2+y3)
-        y5 = self.transformer_decoder.layers[0].linear1(y4)
-        y5 = self.transformer_decoder.layers[0].activation(y5)
-        y5 = self.transformer_decoder.layers[0].dropout(y5)
-        y5 = self.transformer_decoder.layers[0].linear2(y5)
-        y5 = self.transformer_decoder.layers[0].dropout3(y5)
-        out = self.transformer_decoder.layers[0].norm3(y4+y5)
-        out = self.transformer_decoder.norm(out) # 7,150,224
-        #out = self.transformer_decoder(tgt, memory) # 7,150,224
+        out = self.transformer_decoder(tgt, memory) # 7,150,224
 
         Qs = self.Q_linear(out).permute(2, 1, 0).squeeze(0) # 7,150,1 -> 1,150,7 -> 150,7
         Qs = self.q_f(Qs)

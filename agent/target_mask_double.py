@@ -10,7 +10,7 @@ from pfrl.utils.recurrent import (
     wrap_packed_sequences_recursive,
 )
 
-from agent.convLSTM import ConvLSTMCell
+from agent.module.convLSTM import ConvLSTMCell
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
